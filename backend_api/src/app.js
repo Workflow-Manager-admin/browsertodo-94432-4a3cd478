@@ -25,6 +25,11 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
   swaggerUi.setup(dynamicSpec)(req, res, next);
 });
 
+// Redirect /api-docs to Swagger docs for standardization
+app.get('/api-docs', (req, res) => {
+  res.redirect('/docs');
+});
+
 // Parse JSON request body
 app.use(express.json());
 
