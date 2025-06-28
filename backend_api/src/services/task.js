@@ -1,16 +1,48 @@
 //
-// TaskService - in-memory storage and business logic for tasks
-//
-
 /**
- * PUBLIC_INTERFACE
- * TaskService manages an in-memory list of tasks with CRUD operations.
- * Tasks schema: { id: string, description: string, completed: boolean }
+ * TaskService: File-based persistence (simulating localStorage) + in-memory cache.
+ * On every modification, writes all tasks to disk (tasks.json).
+ * On startup, loads tasks from disk if available; otherwise, starts with empty array.
  */
+
+const fs = require('fs');
+const path = require('path');
+
 class TaskService {
   constructor() {
+    this.filePath = path.join(__dirname, '../../tasks.json');
     this.tasks = [];
     this.nextId = 1;
+    this._load();
+  }
+
+  // Load tasks from disk on init.
+  _load() {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, 'utf8');
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          this.tasks = arr;
+          // Compute nextId as max id + 1
+          const maxId = arr.reduce((max, t) => Math.max(max, parseInt(t.id, 10) || 0), 0);
+          this.nextId = maxId + 1;
+        }
+      }
+    } catch (e) {
+      this.tasks = [];
+      this.nextId = 1;
+    }
+  }
+
+  // Write in-memory tasks to disk after every change
+  _persist() {
+    try {
+      fs.writeFileSync(this.filePath, JSON.stringify(this.tasks, null, 2), 'utf8');
+    } catch (e) {
+      // On error, log it; for test/demo UX silently drop to in-memory-only
+      console.error('Failed to save tasks.json:', e);
+    }
   }
 
   // PUBLIC_INTERFACE
@@ -38,6 +70,7 @@ class TaskService {
       completed: false
     };
     this.tasks.push(task);
+    this._persist();
     return task;
   }
 
@@ -53,6 +86,7 @@ class TaskService {
     if (typeof updates.completed === 'boolean') {
       task.completed = updates.completed;
     }
+    this._persist();
     return { ...task };
   }
 
@@ -62,6 +96,7 @@ class TaskService {
     const idx = this.tasks.findIndex(t => t.id === id);
     if (idx === -1) return false;
     this.tasks.splice(idx, 1);
+    this._persist();
     return true;
   }
 }
