@@ -1,16 +1,53 @@
 //
-// TaskService - in-memory storage and business logic for tasks
-//
-
 /**
  * PUBLIC_INTERFACE
- * TaskService manages an in-memory list of tasks with CRUD operations.
+ * TaskService manages an persistent list of tasks with CRUD operations.
  * Tasks schema: { id: string, description: string, completed: boolean }
+ * Data is persisted on disk using a JSON file to simulate browser localStorage.
  */
+
+const fs = require('fs');
+const path = require('path');
+
+const DATA_PATH = path.join(__dirname, '../../data/tasks.json');
+
 class TaskService {
   constructor() {
     this.tasks = [];
     this.nextId = 1;
+    this._load();
+  }
+
+  // Load tasks from disk if available
+  _load() {
+    try {
+      if (fs.existsSync(DATA_PATH)) {
+        const raw = fs.readFileSync(DATA_PATH, 'utf8');
+        const parsed = JSON.parse(raw);
+        this.tasks = parsed.tasks || [];
+        this.nextId = parsed.nextId || 1;
+      }
+    } catch (err) {
+      // On error, just use empty
+      this.tasks = [];
+      this.nextId = 1;
+    }
+  }
+
+  // Save tasks to disk
+  _save() {
+    try {
+      fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
+      fs.writeFileSync(
+        DATA_PATH,
+        JSON.stringify({ tasks: this.tasks, nextId: this.nextId }, null, 2),
+        'utf8'
+      );
+    } catch (err) {
+      // Could not persist, log error for awareness but continue
+      // Not fatal for business logic
+      console.error('Failed to save tasks:', err);
+    }
   }
 
   // PUBLIC_INTERFACE
@@ -38,6 +75,7 @@ class TaskService {
       completed: false
     };
     this.tasks.push(task);
+    this._save();
     return task;
   }
 
@@ -53,6 +91,7 @@ class TaskService {
     if (typeof updates.completed === 'boolean') {
       task.completed = updates.completed;
     }
+    this._save();
     return { ...task };
   }
 
@@ -62,6 +101,7 @@ class TaskService {
     const idx = this.tasks.findIndex(t => t.id === id);
     if (idx === -1) return false;
     this.tasks.splice(idx, 1);
+    this._save();
     return true;
   }
 }
